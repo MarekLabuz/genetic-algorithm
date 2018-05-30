@@ -6,9 +6,14 @@ import Control.Monad.Random
 import Data.List
 import Control.Monad.Trans.Reader
 
+import Rastrigin (rastrigin)
+import DeJong (dejong)
+import Schwefel (schwefel)
+
 type Individual = [Float]
 type Population = [Individual]
 type Config = (Int, Int, Float, Float, Individual -> Float)
+data TestFunctions = DeJong | Rastrigin | Schwefel
 
 randomFloat :: Float -> Float -> IO Float
 randomFloat min max = randomRIO (min, max)
@@ -28,28 +33,6 @@ initPopulation (n, dimension, min, max, fn)
     i <- randomIndividual dimension min max
     n <- initPopulation ((n - 1), dimension, min, max, fn)
     return $ i:n
-
--- Rastrigin Function
-
-fn :: Float -> Float
-fn x = x ^ 2 - (10 * (cos $ 2 * pi * x))
-
-rastriginLoop :: Individual -> Float
-rastriginLoop (x:xs)
-  | length xs == 0 = fn x
-  | otherwise = (fn x) + (rastriginLoop xs)
-
-rastrigin :: Individual -> Float
-rastrigin x = 10 * (fromIntegral $ length x) + rastriginLoop x
-
---
-
--- DeJong Function
-
-dejong :: Individual -> Float
-dejong x = sum $ map (^2) x
-
---
 
 computeFitness :: Config -> Population -> [Float]
 computeFitness (_, _, _, _, fn) population = map fn population
@@ -81,7 +64,7 @@ mergePairs ((i1, i2):xs) = i1:i2:(mergePairs xs)
 
 exchangeGenes :: (Individual, Individual) -> (Individual, Individual)
 exchangeGenes (i1, i2) = do
-  let len = floor $ (fromIntegral $ length i1) / 3
+  let len = ceiling $ (fromIntegral $ length i1) / 3
   let i11 = take len i1
   let i21 = take len i2
   (i21 ++ (drop len i1), i11 ++ (drop len i2))
@@ -101,18 +84,25 @@ mutateIndividual x = sequence $ map (mutateGene (-40) 40) x
 mutation :: Population -> IO Population
 mutation p = sequence $ map mutateIndividual p
 
-geneticLoop :: Int -> Population -> [Float] -> ReaderT Config IO Float
+geneticLoop :: Int -> Population -> [Float] -> ReaderT Config IO (Individual, Float)
 geneticLoop generations population fitness = do
   config <- ask
-  if generations == 0 then return $ minimum $ computeFitness config population
+  if generations == 0 then do
+    let fitness = computeFitness config population
+    return $ minimumBy sortIndividials $ zip population fitness
   else do
     population <- liftIO $ initPopulation config
     newPopulation <- liftIO $ mutation $ crossover $ selection population $ computeFitness config population
     geneticLoop (generations - 1) newPopulation (computeFitness config newPopulation)
 
-genetic = do
-  let config = (1000, 2, 40.0, -40.0, rastrigin)
+testFunctions :: TestFunctions -> Config
+testFunctions name = case name of
+  DeJong -> (1000, 2, 40.0, -40.0, dejong)
+  Rastrigin -> (1000, 2, 40.0, -40.0, rastrigin)
+  Schwefel -> (1000, 2, -500.0, 500.0, schwefel)
+
+genetic :: TestFunctions -> IO (Individual, Float)
+genetic name = do
+  let config = testFunctions name
   population <- initPopulation config
-  runReaderT (geneticLoop 100 population $ computeFitness config population) config
-
-
+  runReaderT (geneticLoop 300 population $ computeFitness config population) config
