@@ -1,0 +1,1 @@
+Initially I created game "Battleships", then I changed by mind and started writing genetic algorithm in haskell, because it seems as a better use case for parallel execution.
