@@ -5,6 +5,8 @@ import System.Random (randomRIO)
 import Control.Monad.Random
 import Data.List
 import Control.Monad.Trans.Reader
+import Control.Parallel.Strategies
+import Data.Time
 
 import Rastrigin (rastrigin)
 import DeJong (dejong)
@@ -35,7 +37,7 @@ initPopulation (n, dimension, min, max, fn)
     return $ i:n
 
 computeFitness :: Config -> Population -> [Float]
-computeFitness (_, _, _, _, fn) population = map fn population
+computeFitness (_, _, _, _, fn) population = map fn population `using` parList rpar
 
 sortIndividials :: (Individual, Float) -> (Individual, Float) -> Ordering
 sortIndividials a b
@@ -70,7 +72,7 @@ exchangeGenes (i1, i2) = do
   (i21 ++ (drop len i1), i11 ++ (drop len i2))
 
 crossover :: Population -> Population
-crossover population = mergePairs $ map exchangeGenes $ groupIntoPairs population
+crossover population = mergePairs (map exchangeGenes (groupIntoPairs population) `using` parList rpar)
 
 mutateGene :: Float -> Float -> Float -> IO Float
 mutateGene min max g = do
@@ -82,7 +84,7 @@ mutateIndividual :: Individual -> IO Individual
 mutateIndividual x = sequence $ map (mutateGene (-40) 40) x
 
 mutation :: Population -> IO Population
-mutation p = sequence $ map mutateIndividual p
+mutation p = sequence (map mutateIndividual p `using` parList rpar)
 
 geneticLoop :: Int -> Population -> [Float] -> ReaderT Config IO (Individual, Float)
 geneticLoop generations population fitness = do
@@ -97,7 +99,7 @@ geneticLoop generations population fitness = do
 
 testFunctions :: TestFunctions -> Config
 testFunctions name = case name of
-  DeJong -> (1000, 2, 40.0, -40.0, dejong)
+  DeJong -> (10000, 2, 40.0, -40.0, dejong)
   Rastrigin -> (1000, 2, 40.0, -40.0, rastrigin)
   Schwefel -> (1000, 2, -500.0, 500.0, schwefel)
 
@@ -105,4 +107,10 @@ genetic :: TestFunctions -> IO (Individual, Float)
 genetic name = do
   let config = testFunctions name
   population <- initPopulation config
-  runReaderT (geneticLoop 300 population $ computeFitness config population) config
+  runReaderT (geneticLoop 10 population $ computeFitness config population) config
+
+main = do
+  start <- getCurrentTime
+  r <- genetic DeJong
+  end <- getCurrentTime
+  putStrLn $ (show r) ++ " in " ++ (show $ diffUTCTime end start)
