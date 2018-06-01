@@ -9,13 +9,13 @@ import Control.Parallel.Strategies
 import Data.Time
 
 import Rastrigin (rastrigin)
-import DeJong (dejong)
+import Ackley (ackley)
 import Schwefel (schwefel)
 
 type Individual = [Float]
 type Population = [Individual]
 type Config = (Int, Int, Float, Float, Individual -> Float)
-data TestFunctions = DeJong | Rastrigin | Schwefel
+data TestFunctions = Ackley | Rastrigin | Schwefel
 
 randomFloat :: Float -> Float -> IO Float
 randomFloat min max = randomRIO (min, max)
@@ -69,10 +69,13 @@ mergePairs ((i1, i2):xs) = i1:i2:(mergePairs xs)
 
 exchangeGenes :: (Individual, Individual) -> IO (Individual, Individual)
 exchangeGenes (i1, i2) = do
-  len <- randomRIO (1, length i1)
-  side <- randomFloat 0 1
-  let (f1, f2) = if' (side > 0.5) (take, drop) (drop, take)
-  return ((f1 len i2) ++ (f2 len i1), (f1 len i1) ++ (f2 len i2))
+  r <- randomFloat 0 1
+  if r >= 0.3 then do
+    len <- randomRIO (1, length i1)
+    side <- randomFloat 0 1
+    let (f1, f2) = if' (side > 0.5) (take, drop) (drop, take)
+    return ((f1 len i2) ++ (f2 len i1), (f1 len i1) ++ (f2 len i2))
+  else return (i1, i2)
 
 crossover :: Population -> IO Population
 crossover population = do
@@ -82,7 +85,7 @@ crossover population = do
 mutateGene :: Float -> Float -> Float -> IO Float
 mutateGene min max g = do
   r <- randomFloat 0 1
-  if r > 0.99 then randomFloat min max
+  if r >= 0.99 then randomFloat min max
   else return g
 
 mutateIndividual :: Config -> Individual -> IO Individual
@@ -106,13 +109,15 @@ geneticLoop = do
   let newFitness = computeFitness config newPopulation
   let newLowest = minimumBy sortIndividials $ zip population newFitness
   let l = if' (snd newLowest < snd lowest) newLowest lowest
+  -- Print minimum value achieved so far:
+  liftIO $ putStrLn $ show $ snd l
   lift $ put (l, newPopulation, newFitness, generations - 1)
   if generations == 0 then return l else geneticLoop
 
 testFunctions :: TestFunctions -> Config
 testFunctions name = case name of
-  DeJong -> (120, 50, -40.0, 40.0, dejong)
-  Rastrigin -> (120, 50, -40.0, 40.0, rastrigin)
+  Ackley -> (120, 50, -32.0, 32.0, ackley)
+  Rastrigin -> (120, 50, -5.0, 5.0, rastrigin)
   Schwefel -> (120, 50, -500.0, 500.0, schwefel)
 
 genetic :: TestFunctions -> IO (Individual, Float)
