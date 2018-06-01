@@ -1,6 +1,5 @@
 import Control.Monad.Trans
 import Control.Monad.Trans.State
-import System.Console.Haskeline
 import System.Random (randomRIO)
 import Control.Monad.Random
 import Data.List
