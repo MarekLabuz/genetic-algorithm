@@ -69,9 +69,11 @@ mergePairs ((i1, i2):xs) = i1:i2:(mergePairs xs)
 exchangeGenes :: (Individual, Individual) -> IO (Individual, Individual)
 exchangeGenes (i1, i2) = do
   len <- randomRIO (1, length i1)
-  let i11 = take len i1
-  let i21 = take len i2
-  return (i21 ++ (drop len i1), i11 ++ (drop len i2))
+  side <- randomFloat 0 1
+  let (f1, f2) = if' (side > 0.5) (take, drop) (drop, take)
+  let i11 = f1 len i1
+  let i21 = f1 len i2
+  return (i21 ++ (f2 len i1), i11 ++ (f2 len i2))
 
 crossover :: Population -> IO Population
 crossover population = do
@@ -81,11 +83,11 @@ crossover population = do
 mutateGene :: Float -> Float -> Float -> IO Float
 mutateGene min max g = do
   r <- randomFloat 0 1
-  if r > 0.995 then randomFloat min max
+  if r > 0.99 then randomFloat min max
   else return g
 
 mutateIndividual :: Config -> Individual -> IO Individual
-mutateIndividual (_, _, min, max, _) x = sequence $ map (mutateGene min max) x
+mutateIndividual (_, _, min, max, _) x = sequence (map (mutateGene min max) x `using` parList rpar)
 
 mutation :: Config -> Population -> IO Population
 mutation config p = sequence (map (mutateIndividual config) p `using` parList rpar)
@@ -108,13 +110,14 @@ geneticLoop = do
   let newLowest = minimumBy sortIndividials $ zip population newFitness
   let l = if' (snd newLowest < snd lowest) newLowest lowest
   lift $ put (l, newPopulation, newFitness, generations - 1)
+  liftIO $ putStrLn $ show $ snd l
   if generations == 0 then return l else geneticLoop
 
 testFunctions :: TestFunctions -> Config
 testFunctions name = case name of
-  DeJong -> (1000, 10, -40.0, 40.0, dejong)
-  Rastrigin -> (1000, 10, -40.0, 40.0, rastrigin)
-  Schwefel -> (1000, 10, -500.0, 500.0, schwefel)
+  DeJong -> (100, 50, -40.0, 40.0, dejong)
+  Rastrigin -> (100, 50, -40.0, 40.0, rastrigin)
+  Schwefel -> (100, 50, -500.0, 500.0, schwefel)
 
 genetic :: TestFunctions -> IO (Individual, Float)
 genetic name = do
@@ -122,7 +125,7 @@ genetic name = do
   population <- initPopulation config
   let fitness = computeFitness config population
   let low = minimumBy sortIndividials $ zip population fitness
-  r <- runStateT (runReaderT geneticLoop config) (low, population, fitness, 500)
+  r <- runStateT (runReaderT geneticLoop config) (low, population, fitness, 1000)
   return $ fst r
 
 main = do
