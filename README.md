@@ -37,5 +37,5 @@ Expected results:
 <p>
 <img src="https://www.sfu.ca/~ssurjano/schwef3.png">
 
-<sub>Image Source: https://www.sfu.ca/~ssurjano/schwef.html</sub>
+<sub>Image source: https://www.sfu.ca/~ssurjano/schwef.html</sub>
 </p>
