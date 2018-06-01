@@ -48,15 +48,16 @@ sortIndividials a b
 selectIndividuals :: RandomGen g => g -> [(Individual, Rational)] -> [Individual]
 selectIndividuals gen weights = evalRand (sequence . repeat . fromList $ weights) gen
 
+toProbability :: Float -> (Individual, Float) -> (Individual, Rational)
+toProbability mx (p, f) = (p, fromIntegral $ round $ mx - f)
+
 selection :: Population -> [Float] -> IO Population
 selection population fitness = do
   r <- randomRIO (1, 10000)
-  return $ take len $ selectIndividuals (mkStdGen r) probability
+  return $ take (length population) $ selectIndividuals (mkStdGen r) probability
   where
-    zipped = zip population fitness
     m = (maximum fitness) + 1
-    probability = map (\(p, f) -> (p, fromIntegral $ round $ m - f)) zipped
-    len = length population
+    probability = map (toProbability m) (zip population fitness) `using` parList rpar
 
 groupIntoPairs :: Population -> [(Individual, Individual)]
 groupIntoPairs [] = []
@@ -71,9 +72,7 @@ exchangeGenes (i1, i2) = do
   len <- randomRIO (1, length i1)
   side <- randomFloat 0 1
   let (f1, f2) = if' (side > 0.5) (take, drop) (drop, take)
-  let i11 = f1 len i1
-  let i21 = f1 len i2
-  return (i21 ++ (f2 len i1), i11 ++ (f2 len i2))
+  return ((f1 len i2) ++ (f2 len i1), (f1 len i1) ++ (f2 len i2))
 
 crossover :: Population -> IO Population
 crossover population = do
@@ -104,9 +103,9 @@ geneticLoop :: (Individual, Float) -> Population -> [Float] -> Int -> ReaderT Co
 geneticLoop lowest population fitness generations = do
   config <- ask
   -- (lowest, population, fitness, generations) <- lift get
-  selected <- liftIO $ selection population fitness
-  crossedOver <- liftIO $ crossover selected
-  newPopulation <- liftIO $ mutation config crossedOver
+  -- selected <- liftIO $ selection population fitness
+  -- crossedOver <- liftIO $ crossover selected
+  newPopulation <- liftIO $ selection population fitness >>= crossover >>= mutation config
   let newFitness = computeFitness config newPopulation
   let newLowest = minimumBy sortIndividials $ zip population newFitness
   let l = if' (snd newLowest < snd lowest) newLowest lowest
