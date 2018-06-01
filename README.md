@@ -3,7 +3,7 @@
 Initially, I created game "Battleships", but then I changed my mind, because the game turned out to be not a good use case for parallel execution. Therefore, I have written genetic algorithm in Haskell.
 
 The algorithm consists of four steps:
- - calculating fitness of each individual in population (can be done in parallel)
+ - calculating fitness of each individual in a population (can be done in parallel)
  - selection of best individuals based on their fitness
  - crossover (can be done in parallel)
  - mutation (can be done in parallel)
@@ -22,3 +22,20 @@ Three optimization problems have been implemented. The goal is to find minimum o
 - Ackley function: https://www.sfu.ca/~ssurjano/ackley.html
 - Schwefel function: https://www.sfu.ca/~ssurjano/schwef.html
 - Rastrigin function: https://www.sfu.ca/~ssurjano/rastr.html
+
+Example output for Schwefel function:
+```
+([418.93805,389.37775,420.706,421.37262,418.93805,409.66266,418.93805,421.37262,421.75006,418.93805,418.93805,421.37262,420.706,421.37262,418.93805,418.93805,421.37262,420.706,420.706,421.37262,420.706,421.37262,420.706,-277.5094,421.37262,421.37262,421.75006,418.93805,418.93805,421.37262,420.706,420.706,420.706,420.706,421.37262,420.706,420.706,409.66266,420.706,420.706,421.37262,421.37262,409.66266,420.706,420.706,420.706,418.93805,421.75006,420.706,418.93805],4.9492188) in 20.83412s
+```
+It is a tuple where
+- first element is an array of arguments for which a value of Schwefel function was found to be minimal
+- second element is a found minimum of the function
+
+Additionally, there is an execution time.
+
+Expected results:
+<p>
+<img src="https://www.sfu.ca/~ssurjano/schwef3.png">
+
+Source: https://www.sfu.ca/~ssurjano/schwef.html
+</p>

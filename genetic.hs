@@ -110,7 +110,7 @@ geneticLoop = do
   let newLowest = minimumBy sortIndividials $ zip population newFitness
   let l = if' (snd newLowest < snd lowest) newLowest lowest
   -- Print minimum value achieved so far:
-  liftIO $ putStrLn $ show $ snd l
+  -- liftIO $ putStrLn $ show $ snd l
   lift $ put (l, newPopulation, newFitness, generations - 1)
   if generations == 0 then return l else geneticLoop
 
