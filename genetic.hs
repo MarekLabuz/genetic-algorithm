@@ -115,9 +115,9 @@ geneticLoop = do
 
 testFunctions :: TestFunctions -> Config
 testFunctions name = case name of
-  DeJong -> (100, 50, -40.0, 40.0, dejong)
-  Rastrigin -> (100, 50, -40.0, 40.0, rastrigin)
-  Schwefel -> (100, 50, -500.0, 500.0, schwefel)
+  DeJong -> (120, 50, -40.0, 40.0, dejong)
+  Rastrigin -> (120, 50, -40.0, 40.0, rastrigin)
+  Schwefel -> (120, 50, -500.0, 500.0, schwefel)
 
 genetic :: TestFunctions -> IO (Individual, Float)
 genetic name = do
