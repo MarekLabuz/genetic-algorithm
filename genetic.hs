@@ -48,69 +48,85 @@ sortIndividials a b
 selectIndividuals :: RandomGen g => g -> [(Individual, Rational)] -> [Individual]
 selectIndividuals gen weights = evalRand (sequence . repeat . fromList $ weights) gen
 
-selection :: Population -> [Float] -> Population
-selection population fitness = take len $ selectIndividuals (mkStdGen 1) $ zip sortedPopulation range
+selection :: Population -> [Float] -> IO Population
+selection population fitness = do
+  r <- randomRIO (1, 10000)
+  return $ take len $ selectIndividuals (mkStdGen r) probability
   where
-    range = reverse $ map fromIntegral [0..length population]
-    sortedPopulation = fst $ unzip $ sortBy sortIndividials $ zip population fitness
+    zipped = zip population fitness
+    m = (maximum fitness) + 1
+    probability = map (\(p, f) -> (p, fromIntegral $ round $ m - f)) zipped
     len = length population
 
 groupIntoPairs :: Population -> [(Individual, Individual)]
 groupIntoPairs [] = []
-groupIntoPairs l = (i1, i2):(groupIntoPairs $ drop 2 l) where
-  [i1, i2] = take 2 l
+groupIntoPairs l = (i1, i2):(groupIntoPairs $ drop 2 l) where [i1, i2] = take 2 l
 
 mergePairs :: [(Individual, Individual)] -> Population
 mergePairs [] = []
 mergePairs ((i1, i2):xs) = i1:i2:(mergePairs xs)
 
-exchangeGenes :: (Individual, Individual) -> (Individual, Individual)
+exchangeGenes :: (Individual, Individual) -> IO (Individual, Individual)
 exchangeGenes (i1, i2) = do
-  let len = ceiling $ (fromIntegral $ length i1) / 3
+  len <- randomRIO (1, length i1)
   let i11 = take len i1
   let i21 = take len i2
-  (i21 ++ (drop len i1), i11 ++ (drop len i2))
+  return (i21 ++ (drop len i1), i11 ++ (drop len i2))
 
-crossover :: Population -> Population
-crossover population = mergePairs (map exchangeGenes (groupIntoPairs population) `using` parList rpar)
+crossover :: Population -> IO Population
+crossover population = do
+  s <- sequence (map exchangeGenes (groupIntoPairs population) `using` parList rpar)
+  return $ mergePairs s
 
 mutateGene :: Float -> Float -> Float -> IO Float
 mutateGene min max g = do
   r <- randomFloat 0 1
-  if r > 0.9 then randomFloat min max
+  if r > 0.995 then randomFloat min max
   else return g
 
-mutateIndividual :: Individual -> IO Individual
-mutateIndividual x = sequence $ map (mutateGene (-40) 40) x
+mutateIndividual :: Config -> Individual -> IO Individual
+mutateIndividual (_, _, min, max, _) x = sequence $ map (mutateGene min max) x
 
-mutation :: Population -> IO Population
-mutation p = sequence (map mutateIndividual p `using` parList rpar)
+mutation :: Config -> Population -> IO Population
+mutation config p = sequence (map (mutateIndividual config) p `using` parList rpar)
 
-geneticLoop :: Int -> Population -> [Float] -> ReaderT Config IO (Individual, Float)
-geneticLoop generations population fitness = do
+avg :: [Float] -> Float
+avg a = (sum a) / (fromIntegral $ length a)
+
+if' :: Bool -> a -> a -> a
+if' True x _ = x
+if' False _ y = y
+
+geneticLoop :: ReaderT Config (StateT ((Individual, Float), Population, [Float], Int) IO) (Individual, Float)
+geneticLoop = do
   config <- ask
-  if generations == 0 then do
-    let fitness = computeFitness config population
-    return $ minimumBy sortIndividials $ zip population fitness
-  else do
-    population <- liftIO $ initPopulation config
-    newPopulation <- liftIO $ mutation $ crossover $ selection population $ computeFitness config population
-    geneticLoop (generations - 1) newPopulation (computeFitness config newPopulation)
+  (lowest, population, fitness, generations) <- lift get
+  selected <- liftIO $ selection population fitness
+  crossedOver <- liftIO $ crossover selected
+  newPopulation <- liftIO $ mutation config crossedOver
+  let newFitness = computeFitness config newPopulation
+  let newLowest = minimumBy sortIndividials $ zip population newFitness
+  let l = if' (snd newLowest < snd lowest) newLowest lowest
+  lift $ put (l, newPopulation, newFitness, generations - 1)
+  if generations == 0 then return l else geneticLoop
 
 testFunctions :: TestFunctions -> Config
 testFunctions name = case name of
-  DeJong -> (10000, 2, 40.0, -40.0, dejong)
-  Rastrigin -> (1000, 2, 40.0, -40.0, rastrigin)
-  Schwefel -> (1000, 2, -500.0, 500.0, schwefel)
+  DeJong -> (1000, 10, -40.0, 40.0, dejong)
+  Rastrigin -> (1000, 10, -40.0, 40.0, rastrigin)
+  Schwefel -> (1000, 10, -500.0, 500.0, schwefel)
 
 genetic :: TestFunctions -> IO (Individual, Float)
 genetic name = do
   let config = testFunctions name
   population <- initPopulation config
-  runReaderT (geneticLoop 10 population $ computeFitness config population) config
+  let fitness = computeFitness config population
+  let low = minimumBy sortIndividials $ zip population fitness
+  r <- runStateT (runReaderT geneticLoop config) (low, population, fitness, 500)
+  return $ fst r
 
 main = do
   start <- getCurrentTime
-  r <- genetic DeJong
+  r <- genetic Schwefel
   end <- getCurrentTime
   putStrLn $ (show r) ++ " in " ++ (show $ diffUTCTime end start)
