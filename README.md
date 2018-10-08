@@ -1,7 +1,5 @@
 ## Genetic algorithm
 
-Initially, I created game "Battleships", but then I changed my mind, because the game turned out to be not a good use case for parallel execution. Therefore, I have written genetic algorithm in Haskell.
-
 The algorithm consists of four steps:
  - calculating fitness of each individual in a population (can be done in parallel)
  - selection of best individuals based on their fitness
